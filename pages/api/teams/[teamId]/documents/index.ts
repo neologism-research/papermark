@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth/next";
 import { parsePageId } from "notion-utils";
 
 import { hashToken } from "@/lib/api/auth/token";
-import { errorHandler } from "@/lib/errorHandler";
+import { errorhandler } from "@/lib/errorHandler";
 import { convertCadToPdf } from "@/lib/local-processing/convert-cad-to-pdf";
 import { convertOfficeToPdf } from "@/lib/local-processing/convert-office-to-pdf";
 import { optimizeVideo } from "@/lib/local-processing/optimize-video";
@@ -117,7 +117,7 @@ export default async function handle(
 
       return res.status(200).json(sortedDocuments);
     } catch (error) {
-      errorHandler(error, res);
+      errorhandler(error, res);
     }
   } else if (req.method === "POST") {
     // POST /api/teams/:teamId/documents
@@ -315,7 +315,7 @@ export default async function handle(
         message: `Failed to create document. \n\n*teamId*: _${teamId}_, \n\n*file*: ${fileUrl} \n\n ${error}`,
         type: "error",
       });
-      errorHandler(error, res);
+      errorhandler(error, res);
     }
   } else {
     // We only allow GET and POST requests

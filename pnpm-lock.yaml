@@ -212,6 +212,9 @@ importers:
       jsonwebtoken:
         specifier: ^9.0.2
         version: 9.0.2
+      libreoffice-convert:
+        specifier: ^1.6.1
+        version: 1.6.1
       lucide-react:
         specifier: ^0.483.0
         version: 0.483.0(react@18.3.1)
@@ -4564,6 +4567,10 @@ packages:
 
   libphonenumber-js@1.12.6:
     resolution: {integrity: sha512-PJiS4ETaUfCOFLpmtKzAbqZQjCCKVu2OhTV4SVNNE7c2nu/dACvtCqj4L0i/KWNnIgRv7yrILvBj5Lonv5Ncxw==}
+
+  libreoffice-convert@1.6.1:
+    resolution: {integrity: sha512-j4YtAp8/5EZIGPH1zyzuPHYXBTUXDWvDyDxJY1w67Fw7F2qryvMlYnl6W0cUZN9yWs6aZCG0Ix2/RePOlvh1bA==}
+    engines: {node: '>=6'}
 
   lie@3.3.0:
     resolution: {integrity: sha512-UaiMJzeWRlEujzAuw5LokY1L5ecNQYZKfmyZ9L7wDHb/p5etKaxXhohBcrw0EYby+G/NA52vRSN4N39dxHAIwQ==}
@@ -11454,6 +11461,11 @@ snapshots:
       type-check: 0.4.0
 
   libphonenumber-js@1.12.6: {}
+
+  libreoffice-convert@1.6.1:
+    dependencies:
+      async: 3.2.6
+      tmp: 0.2.3
 
   lie@3.3.0:
     dependencies:
