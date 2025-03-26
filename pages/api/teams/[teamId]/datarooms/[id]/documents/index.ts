@@ -1,14 +1,13 @@
 import { NextApiRequest, NextApiResponse } from "next";
 
 import { authOptions } from "@/pages/api/auth/[...nextauth]";
-import { runs } from "@trigger.dev/sdk/v3";
-import { waitUntil } from "@vercel/functions";
 import { getServerSession } from "next-auth/next";
 
 import { errorhandler } from "@/lib/errorHandler";
 import { getFeatureFlags } from "@/lib/featureFlags";
+import { sendDataroomChangeNotification } from "@/lib/local-processing/dataroom-notification";
+import { scheduleTask } from "@/lib/local-processing/scheduler";
 import prisma from "@/lib/prisma";
-import { sendDataroomChangeNotificationTask } from "@/lib/trigger/dataroom-change-notification";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import { sortItemsByIndexAndName } from "@/lib/utils/sort-items-by-index-name";
@@ -167,36 +166,19 @@ export default async function handle(
       const featureFlags = await getFeatureFlags({ teamId });
 
       if (featureFlags.roomChangeNotifications) {
-        // Get all delayed and queued runs for this dataroom
-        const allRuns = await runs.list({
-          taskIdentifier: ["send-dataroom-change-notification"],
-          tag: [`dataroom_${dataroomId}`],
-          status: ["DELAYED", "QUEUED"],
-          period: "10m",
+        // Schedule the notification with a 10-minute delay
+        scheduleTask(
+          sendDataroomChangeNotification,
+          {
+            dataroomId,
+            dataroomDocumentId: document.id,
+            senderUserId: userId,
+            teamId,
+          },
+          10 * 60 * 1000, // 10 minute delay
+        ).catch((error) => {
+          console.error("Failed to schedule notification:", error);
         });
-
-        // Cancel any existing unsent notification runs for this dataroom
-        await Promise.all(allRuns.data.map((run) => runs.cancel(run.id)));
-
-        waitUntil(
-          sendDataroomChangeNotificationTask.trigger(
-            {
-              dataroomId,
-              dataroomDocumentId: document.id,
-              senderUserId: userId,
-              teamId,
-            },
-            {
-              idempotencyKey: `dataroom-notification-${teamId}-${dataroomId}-${document.id}`,
-              tags: [
-                `team_${teamId}`,
-                `dataroom_${dataroomId}`,
-                `document_${document.id}`,
-              ],
-              delay: new Date(Date.now() + 10 * 60 * 1000), // 10 minute delay
-            },
-          ),
-        );
       }
 
       return res.status(201).json(document);
