@@ -98,6 +98,7 @@
     "next-auth": "^4.24.11",
     "next-plausible": "^3.12.4",
     "next-themes": "^0.4.6",
+    "node-fetch": "^3.3.2",
     "nodemailer": "^6.10.0",
     "notion-client": "^7.3.0",
     "notion-utils": "^7.3.0",

@@ -15,18 +15,18 @@ const nextConfig = {
       : undefined,
   async redirects() {
     return [
-      // {
-      //   source: "/",
-      //   destination: "/documents",
-      //   permanent: false,
-      //   has: [
-      //     {
-      //       type: "host",
-      //       key: "",
-      //       value: process.env.NEXT_PUBLIC_APP_BASE_HOST,
-      //     },
-      //   ],
-      // },
+      {
+        source: "/",
+        destination: "/documents",
+        permanent: false,
+        has: [
+          {
+            type: "host",
+            key: "http://localhost:3000",
+            value: process.env.NEXT_PUBLIC_BASE_URL,
+          },
+        ],
+      },
       {
         source: "/view/cm2xiaxzo000d147xszm9q72o",
         destination: "/view/cm34cqqqx000212oekj9upn8o",
