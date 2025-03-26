@@ -1,7 +1,5 @@
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { DocumentStorageType } from "@prisma/client";
-import { del } from "@vercel/blob";
-import { match } from "ts-pattern";
 
 import { getS3Client } from "./aws-client";
 
@@ -10,59 +8,45 @@ export type DeleteFileOptions = {
   data: string; // url for vercel, folderpath for s3
 };
 
-export const deleteFile = async ({ type, data }: DeleteFileOptions) => {
-  return await match(type)
-    .with(DocumentStorageType.S3_PATH, async () =>
-      deleteAllFilesFromS3Server(data),
-    )
-    .with(DocumentStorageType.VERCEL_BLOB, async () =>
-      deleteFileFromVercelServer(data),
-    )
-    .otherwise(() => {
-      return;
-    });
+export const deleteFileServer = async ({ type, data }: DeleteFileOptions) => {
+  // Always use S3 deletion regardless of the storage type
+  return deleteFileFromS3({ data });
 };
 
-const deleteFileFromVercelServer = async (url: string) => {
-  await del(url);
-};
-
-const deleteAllFilesFromS3Server = async (data: string) => {
-  // get docId from url with starts with "doc_" with regex
-  const dataMatch = data.match(/^(.*doc_[^\/]+)\//);
-  const folderPath = dataMatch ? dataMatch[1] : data;
-
-  const client = getS3Client();
+const deleteFileFromS3 = async ({ data }: { data: string }) => {
+  if (!data) return false;
 
   try {
-    // List all objects in the folder
-    const listParams = {
+    const prefix = data; // The prefix for the S3 keys to delete (typically a folder path)
+    const s3Client = getS3Client();
+
+    // List all objects with the given prefix
+    const listCommand = new ListObjectsV2Command({
       Bucket: process.env.NEXT_PRIVATE_UPLOAD_BUCKET,
-      Prefix: `${folderPath}/`, // Ensure this ends with a slash if it's a folder
-    };
-    const listedObjects = await client.send(
-      new ListObjectsV2Command(listParams),
-    );
+      Prefix: prefix,
+    });
 
-    if (!listedObjects.Contents) return;
-    if (listedObjects.Contents.length === 0) return;
+    const listedObjects = await s3Client.send(listCommand);
 
-    // Prepare delete parameters
+    if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+      return false;
+    }
+
+    // Prepare objects to delete
     const deleteParams = {
       Bucket: process.env.NEXT_PRIVATE_UPLOAD_BUCKET,
       Delete: {
-        Objects: listedObjects.Contents.map((file) => ({ Key: file.Key })),
+        Objects: listedObjects.Contents.map(({ Key }) => ({ Key })),
+        Quiet: false,
       },
     };
 
     // Delete the objects
-    await client.send(new DeleteObjectsCommand(deleteParams));
+    await s3Client.send(new DeleteObjectsCommand(deleteParams));
 
-    if (listedObjects.IsTruncated) {
-      // If there are more files than returned in a single request, recurse
-      await deleteAllFilesFromS3Server(folderPath);
-    }
+    return true;
   } catch (error) {
-    console.error("Error deleting files:", error);
+    console.error("Error deleting file from S3:", error);
+    return false;
   }
 };

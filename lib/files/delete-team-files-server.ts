@@ -1,61 +1,58 @@
 import { DeleteObjectsCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
-import { del } from "@vercel/blob";
 
 import { getS3Client } from "./aws-client";
 
 export type DeleteFilesOptions = {
   teamId: string;
-  data?: string[]; // urls for vercel, not needed for s3
 };
 
-export const deleteFiles = async ({ teamId, data }: DeleteFilesOptions) => {
-  // run both delete functions in parallel
-  await Promise.allSettled([
-    deleteAllFilesFromS3Server(teamId),
-    data && deleteFileFromVercelServer(data),
-  ]);
+export const deleteTeamFilesServer = async ({ teamId }: DeleteFilesOptions) => {
+  return deleteTeamFilesFromS3Server(teamId);
 };
 
-const deleteFileFromVercelServer = async (urls: string[]) => {
-  const deleteUrlsPromises = urls.map((url) => del(url));
-  await Promise.allSettled(deleteUrlsPromises);
-};
-
-const deleteAllFilesFromS3Server = async (teamId: string) => {
-  // the teamId is the first prefix in the folder path
-  const folderPath = teamId;
-
-  const client = getS3Client();
-
+const deleteTeamFilesFromS3Server = async (teamId: string) => {
   try {
-    // List all objects in the folder
-    const listParams = {
+    const s3Client = getS3Client();
+
+    // List all objects with the given team prefix
+    const listCommand = new ListObjectsV2Command({
       Bucket: process.env.NEXT_PRIVATE_UPLOAD_BUCKET,
-      Prefix: `${folderPath}/`, // Ensure this ends with a slash if it's a folder
-    };
-    const listedObjects = await client.send(
-      new ListObjectsV2Command(listParams),
-    );
+      Prefix: `${teamId}/`,
+    });
 
-    if (!listedObjects.Contents) return;
-    if (listedObjects.Contents.length === 0) return;
+    const listedObjects = await s3Client.send(listCommand);
 
-    // Prepare delete parameters
-    const deleteParams = {
-      Bucket: process.env.NEXT_PRIVATE_UPLOAD_BUCKET,
-      Delete: {
-        Objects: listedObjects.Contents.map((file) => ({ Key: file.Key })),
-      },
-    };
-
-    // Delete the objects
-    await client.send(new DeleteObjectsCommand(deleteParams));
-
-    if (listedObjects.IsTruncated) {
-      // If there are more files than returned in a single request, recurse
-      await deleteAllFilesFromS3Server(folderPath);
+    if (!listedObjects.Contents || listedObjects.Contents.length === 0) {
+      return true;
     }
+
+    // Prepare objects to delete - We can only delete 1000 at a time
+    const chunks = [];
+    for (let i = 0; i < listedObjects.Contents.length; i += 1000) {
+      chunks.push(listedObjects.Contents.slice(i, i + 1000));
+    }
+
+    // Delete all chunks
+    for (const chunk of chunks) {
+      const deleteParams = {
+        Bucket: process.env.NEXT_PRIVATE_UPLOAD_BUCKET,
+        Delete: {
+          Objects: chunk.map(({ Key }) => ({ Key })),
+          Quiet: false,
+        },
+      };
+
+      await s3Client.send(new DeleteObjectsCommand(deleteParams));
+    }
+
+    // If there are more files (truncated), recursively call this function
+    if (listedObjects.IsTruncated) {
+      await deleteTeamFilesFromS3Server(teamId);
+    }
+
+    return true;
   } catch (error) {
-    console.error("Error deleting files:", error);
+    console.error("Error deleting team files from S3:", error);
+    return false;
   }
 };

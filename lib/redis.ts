@@ -1,6 +1,4 @@
-// Import express-rate-limit and Redis store
-import { rateLimit } from "express-rate-limit";
-import RedisStore from "rate-limit-redis";
+// Import required modules
 import { RedisClientType, createClient } from "redis";
 
 // Create Redis client with standard connection
@@ -24,19 +22,63 @@ lockerRedisClient
   .connect()
   .catch((err: Error) => console.error("Redis locker connection error:", err));
 
-// Create a new ratelimiter function that returns a configured rate limiter
+// Create a compatible rate limiter implementation that matches the Upstash interface
 export const ratelimit = (
   requests: number = 10,
   duration: number = 10, // In seconds
 ) => {
-  return rateLimit({
-    windowMs: duration * 1000,
-    max: requests,
-    standardHeaders: true,
-    store: new RedisStore({
-      // @ts-ignore - Type issue with sendCommand in the rate-limit-redis types
-      sendCommand: (...args: string[]) => redis.sendCommand(args),
-      prefix: "papermark:rl:",
-    }),
-  });
+  // Instead of express-rate-limit, we'll implement a simple rate limiter using Redis
+  // that matches the Upstash interface with a 'limit' method
+  const prefix = "papermark:rl:";
+
+  return {
+    // The limit function checks if we should allow the request
+    limit: async (identifier: string) => {
+      const key = `${prefix}${identifier}`;
+      const now = Date.now();
+      const windowMs = duration * 1000;
+
+      try {
+        // Use Redis to implement the sliding window algorithm
+        const multi = redis.multi();
+
+        // Clean up old entries outside the current window
+        multi.zRemRangeByScore(key, 0, now - windowMs);
+
+        // Add the current request
+        multi.zAdd(key, { score: now, value: now.toString() });
+
+        // Count requests in the window
+        multi.zCard(key);
+
+        // Set expiration for cleanup
+        multi.expire(key, Math.ceil(duration * 1.5)); // 1.5x the window for safety
+
+        const results = await multi.exec();
+        const count = (results?.[2] as number) || 0;
+
+        const success = count <= requests;
+        const remaining = Math.max(0, requests - count);
+        const reset = now + windowMs;
+
+        return {
+          success, // true if under the limit
+          limit: requests,
+          remaining,
+          reset,
+          pending: Promise.resolve(null),
+        };
+      } catch (err) {
+        console.error("Rate limit error:", err);
+        // On error, allow the request (fail open to prevent blocking all traffic)
+        return {
+          success: true,
+          limit: requests,
+          remaining: 1,
+          reset: now + windowMs,
+          pending: Promise.resolve(null),
+        };
+      }
+    },
+  };
 };

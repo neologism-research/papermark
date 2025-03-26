@@ -1,12 +1,7 @@
 import { DocumentStorageType } from "@prisma/client";
-import { upload } from "@vercel/blob/client";
-import { match } from "ts-pattern";
 
 import { newId } from "@/lib/id-helper";
-import {
-  getPagesCount,
-  getSheetsCount,
-} from "@/lib/utils/get-page-number-count";
+import { getPagesCount } from "@/lib/utils/get-page-number-count";
 
 import { SUPPORTED_DOCUMENT_MIME_TYPES } from "../constants";
 
@@ -24,43 +19,8 @@ export const putFile = async ({
   numPages: number | undefined;
   fileSize: number | undefined;
 }> => {
-  const NEXT_PUBLIC_UPLOAD_TRANSPORT = process.env.NEXT_PUBLIC_UPLOAD_TRANSPORT;
-
-  const { type, data, numPages, fileSize } = await match(
-    NEXT_PUBLIC_UPLOAD_TRANSPORT,
-  )
-    .with("s3", async () => putFileInS3({ file, teamId, docId }))
-    .with("vercel", async () => putFileInVercel(file))
-    .otherwise(() => {
-      return {
-        type: null,
-        data: null,
-        numPages: undefined,
-        fileSize: undefined,
-      };
-    });
-
-  return { type, data, numPages, fileSize };
-};
-
-const putFileInVercel = async (file: File) => {
-  const newBlob = await upload(file.name, file, {
-    access: "public",
-    handleUploadUrl: "/api/file/browser-upload",
-  });
-
-  let numPages: number = 1;
-  if (file.type === "application/pdf") {
-    const contents = await file.arrayBuffer();
-    numPages = await getPagesCount(contents);
-  }
-
-  return {
-    type: DocumentStorageType.VERCEL_BLOB,
-    data: newBlob.url,
-    numPages: numPages,
-    fileSize: file.size,
-  };
+  // Always use S3 regardless of environment setting
+  return putFileInS3({ file, teamId, docId });
 };
 
 const putFileInS3 = async ({

@@ -1,6 +1,4 @@
 import { DocumentStorageType } from "@prisma/client";
-import { getDownloadUrl } from "@vercel/blob";
-import { match } from "ts-pattern";
 
 export type GetFileOptions = {
   type: DocumentStorageType;
@@ -13,21 +11,14 @@ export const getFile = async ({
   data,
   isDownload = false,
 }: GetFileOptions): Promise<string> => {
-  const url = await match(type)
-    .with(DocumentStorageType.VERCEL_BLOB, () => {
-      if (isDownload) {
-        return getDownloadUrl(data);
-      } else {
-        return data;
-      }
-    })
-    .with(DocumentStorageType.S3_PATH, async () => getFileFromS3(data))
-    .exhaustive();
-
-  return url;
+  // Always use S3 URL generation regardless of storage type
+  return getFileFromS3(data);
 };
 
-const getFileFromS3 = async (key: string) => {
+// Function to generate a URL for an S3 object
+async function getFileFromS3(key: string): Promise<string> {
+  // Fallback to the original presigned URL implementation
+  // which is more reliable than direct CloudFront URLs
   const response = await fetch(
     `${process.env.NEXT_PUBLIC_BASE_URL}/api/file/s3/get-presigned-get-url`,
     {
@@ -48,4 +39,4 @@ const getFileFromS3 = async (key: string) => {
   const { url } = (await response.json()) as { url: string };
 
   return url;
-};
+}
