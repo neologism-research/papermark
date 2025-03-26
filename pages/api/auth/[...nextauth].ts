@@ -1,5 +1,4 @@
 import { PrismaAdapter } from "@next-auth/prisma-adapter";
-import PasskeyProvider from "@teamhanko/passkeys-next-auth-provider";
 import NextAuth, { type NextAuthOptions } from "next-auth";
 import EmailProvider from "next-auth/providers/email";
 import GoogleProvider from "next-auth/providers/google";
@@ -8,7 +7,6 @@ import LinkedInProvider from "next-auth/providers/linkedin";
 import { identifyUser, trackAnalytics } from "@/lib/analytics";
 import { sendVerificationRequestEmail } from "@/lib/emails/send-verification-request";
 import { sendWelcomeEmail } from "@/lib/emails/send-welcome";
-import hanko from "@/lib/hanko";
 import prisma from "@/lib/prisma";
 import { CreateUserEmailProps, CustomUser } from "@/lib/types";
 import { subscribe } from "@/lib/unsend";
@@ -68,14 +66,6 @@ export const authOptions: NextAuthOptions = {
             email: identifier,
           });
         }
-      },
-    }),
-    PasskeyProvider({
-      tenant: hanko,
-      async authorize({ userId }) {
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (!user) return null;
-        return user;
       },
     }),
   ],

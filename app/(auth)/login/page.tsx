@@ -5,21 +5,18 @@ import { useParams } from "next/navigation";
 
 import { useState } from "react";
 
-import { signInWithPasskey } from "@teamhanko/passkeys-next-auth-provider/client";
 import { signIn } from "next-auth/react";
 import { toast } from "sonner";
 import { z } from "zod";
 
+import { cn } from "@/lib/utils";
+
 import { LastUsed, useLastUsed } from "@/components/hooks/useLastUsed";
 import Google from "@/components/shared/icons/google";
 import LinkedIn from "@/components/shared/icons/linkedin";
-import Passkey from "@/components/shared/icons/passkey";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-
-import { cn } from "@/lib/utils";
-import { validateEmail } from "@/lib/utils/validate-email";
 
 export default function Login() {
   const { next } = useParams as { next?: string };
@@ -178,25 +175,6 @@ export default function Login() {
                 {clickedMethod !== "linkedin" && lastUsed === "linkedin" && (
                   <LastUsed />
                 )}
-              </Button>
-            </div>
-            <div className="relative">
-              <Button
-                onClick={() => {
-                  setLastUsed("passkey");
-                  setClickedMethod("passkey");
-                  signInWithPasskey({
-                    tenantId: process.env.NEXT_PUBLIC_HANKO_TENANT_ID as string,
-                  });
-                }}
-                variant="outline"
-                loading={clickedMethod === "passkey"}
-                disabled={clickedMethod && clickedMethod !== "passkey"}
-                className="flex w-full items-center justify-center space-x-2 border border-gray-200 bg-gray-100 font-normal text-gray-900 hover:bg-gray-200 hover:text-gray-900"
-              >
-                <Passkey className="h-4 w-4" />
-                <span>Continue with a passkey</span>
-                {lastUsed === "passkey" && <LastUsed />}
               </Button>
             </div>
           </div>

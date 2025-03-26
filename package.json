@@ -59,7 +59,6 @@
     "@stripe/stripe-js": "^4.10.0",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/react-table": "^8.21.2",
-    "@teamhanko/passkeys-next-auth-provider": "^0.3.1",
     "@tremor/react": "^3.18.7",
     "@trigger.dev/react-hooks": "^3.3.17",
     "@trigger.dev/sdk": "^3.3.17",
