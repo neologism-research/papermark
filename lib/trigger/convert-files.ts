@@ -4,9 +4,9 @@ import { getFile } from "@/lib/files/get-file";
 import { putFileServer } from "@/lib/files/put-file-server";
 import prisma from "@/lib/prisma";
 
+import { convertPdfToImage } from "../local-processing/pdf-to-image";
 import { updateStatus } from "../utils/generate-trigger-status";
 import { getExtensionFromContentType } from "../utils/get-content-type";
-import { convertPdfToImageRoute } from "./pdf-to-image-route";
 
 export type ConvertPayload = {
   documentId: string;
@@ -175,22 +175,16 @@ export const convertFilesToPdfTask = task({
 
     updateStatus({ progress: 40, text: "Initiating document processing..." });
 
-    await convertPdfToImageRoute.trigger(
-      {
+    try {
+      await convertPdfToImage({
         documentId: payload.documentId,
         documentVersionId: payload.documentVersionId,
         teamId: payload.teamId,
-        versionNumber: versionNumber,
-      },
-      {
-        idempotencyKey: `${payload.teamId}-${payload.documentVersionId}`,
-        tags: [
-          `team_${payload.teamId}`,
-          `document_${payload.documentId}`,
-          `version:${payload.documentVersionId}`,
-        ],
-      },
-    );
+      });
+      console.log("PDF to image conversion completed successfully");
+    } catch (error) {
+      console.error("Error converting PDF to images:", error);
+    }
 
     logger.info("Document converted", {
       documentId: payload.documentId,
@@ -362,21 +356,16 @@ export const convertCadToPdfTask = task({
       },
     });
 
-    await convertPdfToImageRoute.trigger(
-      {
+    try {
+      await convertPdfToImage({
         documentId: payload.documentId,
         documentVersionId: payload.documentVersionId,
         teamId: payload.teamId,
-      },
-      {
-        idempotencyKey: `${payload.teamId}-${payload.documentVersionId}`,
-        tags: [
-          `team_${payload.teamId}`,
-          `document_${payload.documentId}`,
-          `version:${payload.documentVersionId}`,
-        ],
-      },
-    );
+      });
+      console.log("PDF to image conversion completed successfully");
+    } catch (error) {
+      console.error("Error converting PDF to images:", error);
+    }
 
     logger.info("Document converted", {
       documentId: payload.documentId,

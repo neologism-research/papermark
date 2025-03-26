@@ -169,6 +169,9 @@ model Document {
   @@index([folderId])
 }
 
+// DocumentVersion represents a version of a document, which can be PDF, DOCX, etc.
+// When a document is uploaded, a DocumentVersion is created with `isPrimary` set to true.
+// Page preview images are generated locally from PDFs and stored in DocumentPage.
 model DocumentVersion {
   id            String              @id @default(cuid())
   versionNumber Int // e.g., 1, 2, 3 for version control

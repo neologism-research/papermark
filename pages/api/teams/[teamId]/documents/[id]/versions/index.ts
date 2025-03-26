@@ -5,11 +5,11 @@ import { DocumentStorageType } from "@prisma/client";
 import { getServerSession } from "next-auth/next";
 
 import { copyFileToBucketServer } from "@/lib/files/copy-file-to-bucket-server";
+import { convertPdfToImage } from "@/lib/local-processing/pdf-to-image";
 import prisma from "@/lib/prisma";
 import { getTeamWithUsersAndDocument } from "@/lib/team/helper";
 import { convertFilesToPdfTask } from "@/lib/trigger/convert-files";
 import { processVideo } from "@/lib/trigger/optimize-video-files";
-import { convertPdfToImageRoute } from "@/lib/trigger/pdf-to-image-route";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
 import { conversionQueue } from "@/lib/utils/trigger-utils";
@@ -144,27 +144,17 @@ export default async function handle(
         );
       }
 
-      // trigger document uploaded event to trigger convert-pdf-to-image job
+      // skip triggering convert-pdf-to-image job for "notion" / "excel" documents
       if (type === "pdf") {
-        await convertPdfToImageRoute.trigger(
-          {
-            documentId: documentId,
-            documentVersionId: version.id,
-            teamId,
-            // docId: version.file.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
-            versionNumber: version.versionNumber,
-          },
-          {
-            idempotencyKey: `${teamId}-${version.id}`,
-            tags: [
-              `team_${teamId}`,
-              `document_${documentId}`,
-              `version:${version.id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertPdfToImage({
+          documentId: documentId,
+          documentVersionId: version.id,
+          teamId,
+          versionNumber: version.versionNumber,
+        }).catch((error) => {
+          console.error("Error in PDF to image conversion:", error);
+        });
       }
 
       if (type === "sheet" && document?.advancedExcelEnabled) {

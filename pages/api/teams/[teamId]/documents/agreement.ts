@@ -4,10 +4,11 @@ import { DocumentStorageType } from "@prisma/client";
 import { getServerSession } from "next-auth/next";
 
 import { errorhandler } from "@/lib/errorHandler";
+// Import our local implementation
+import { convertPdfToImage } from "@/lib/local-processing/pdf-to-image";
 import prisma from "@/lib/prisma";
 import { getTeamWithUsersAndDocument } from "@/lib/team/helper";
 import { convertFilesToPdfTask } from "@/lib/trigger/convert-files";
-import { convertPdfToImageRoute } from "@/lib/trigger/pdf-to-image-route";
 import { CustomUser } from "@/lib/types";
 import { getExtension, log } from "@/lib/utils";
 import { conversionQueue } from "@/lib/utils/trigger-utils";
@@ -135,25 +136,16 @@ export default async function handle(
         );
       }
 
+      // Convert PDF to images for viewing
       if (type === "pdf") {
-        await convertPdfToImageRoute.trigger(
-          {
-            documentId: document.id,
-            documentVersionId: document.versions[0].id,
-            teamId,
-            // docId: fileUrl.split("/")[1],
-          },
-          {
-            idempotencyKey: `${teamId}-${document.versions[0].id}`,
-            tags: [
-              `team_${teamId}`,
-              `document_${document.id}`,
-              `version:${document.versions[0].id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertPdfToImage({
+          documentId: document.id,
+          documentVersionId: document.versions[0].id,
+          teamId,
+        }).catch((error) => {
+          console.error("Error in PDF to image conversion:", error);
+        });
       }
 
       return res.status(201).json(document);
