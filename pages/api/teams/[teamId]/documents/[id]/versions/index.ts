@@ -5,14 +5,13 @@ import { DocumentStorageType } from "@prisma/client";
 import { getServerSession } from "next-auth/next";
 
 import { copyFileToBucketServer } from "@/lib/files/copy-file-to-bucket-server";
+import { convertOfficeToPdf } from "@/lib/local-processing/convert-office-to-pdf";
+import { optimizeVideo } from "@/lib/local-processing/optimize-video";
 import { convertPdfToImage } from "@/lib/local-processing/pdf-to-image";
 import prisma from "@/lib/prisma";
 import { getTeamWithUsersAndDocument } from "@/lib/team/helper";
-import { convertFilesToPdfTask } from "@/lib/trigger/convert-files";
-import { processVideo } from "@/lib/trigger/optimize-video-files";
 import { CustomUser } from "@/lib/types";
 import { log } from "@/lib/utils";
-import { conversionQueue } from "@/lib/utils/trigger-utils";
 
 export default async function handle(
   req: NextApiRequest,
@@ -103,45 +102,27 @@ export default async function handle(
       });
 
       if (type === "docs" || type === "slides") {
-        await convertFilesToPdfTask.trigger(
-          {
-            documentVersionId: version.id,
-            teamId,
-            documentId,
-          },
-          {
-            idempotencyKey: `${teamId}-${version.id}-docs`,
-            tags: [
-              `team_${teamId}`,
-              `document_${documentId}`,
-              `version:${version.id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertOfficeToPdf({
+          documentId: documentId,
+          documentVersionId: version.id,
+          teamId,
+        }).catch((error) => {
+          console.error("Error in Office to PDF conversion:", error);
+        });
       }
 
       if (type === "video") {
-        await processVideo.trigger(
-          {
-            videoUrl: url,
-            teamId,
-            docId: url.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
-            documentVersionId: version.id,
-            fileSize: fileSize || 0,
-          },
-          {
-            idempotencyKey: `${teamId}-${version.id}`,
-            tags: [
-              `team_${teamId}`,
-              `document_${documentId}`,
-              `version:${version.id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        optimizeVideo({
+          videoUrl: url,
+          teamId,
+          docId: url.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
+          documentVersionId: version.id,
+          fileSize: fileSize || 0,
+        }).catch((error) => {
+          console.error("Error in video optimization:", error);
+        });
       }
 
       // skip triggering convert-pdf-to-image job for "notion" / "excel" documents

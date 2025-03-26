@@ -6,19 +6,16 @@ import { getServerSession } from "next-auth/next";
 import { parsePageId } from "notion-utils";
 
 import { hashToken } from "@/lib/api/auth/token";
-import { errorhandler } from "@/lib/errorHandler";
+import { errorHandler } from "@/lib/errorHandler";
+import { convertCadToPdf } from "@/lib/local-processing/convert-cad-to-pdf";
+import { convertOfficeToPdf } from "@/lib/local-processing/convert-office-to-pdf";
+import { optimizeVideo } from "@/lib/local-processing/optimize-video";
 import { convertPdfToImage } from "@/lib/local-processing/pdf-to-image";
 import notion from "@/lib/notion";
 import prisma from "@/lib/prisma";
 import { getTeamWithUsersAndDocument } from "@/lib/team/helper";
-import {
-  convertCadToPdfTask,
-  convertFilesToPdfTask,
-} from "@/lib/trigger/convert-files";
-import { processVideo } from "@/lib/trigger/optimize-video-files";
 import { CustomUser } from "@/lib/types";
 import { getExtension, log } from "@/lib/utils";
-import { conversionQueue } from "@/lib/utils/trigger-utils";
 
 export default async function handle(
   req: NextApiRequest,
@@ -120,7 +117,7 @@ export default async function handle(
 
       return res.status(200).json(sortedDocuments);
     } catch (error) {
-      errorhandler(error, res);
+      errorHandler(error, res);
     }
   } else if (req.method === "POST") {
     // POST /api/teams/:teamId/documents
@@ -266,65 +263,38 @@ export default async function handle(
       });
 
       if (type === "docs" || type === "slides") {
-        await convertFilesToPdfTask.trigger(
-          {
-            documentId: document.id,
-            documentVersionId: document.versions[0].id,
-            teamId,
-          },
-          {
-            idempotencyKey: `${teamId}-${document.versions[0].id}-docs`,
-            tags: [
-              `team_${teamId}`,
-              `document_${document.id}`,
-              `version:${document.versions[0].id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertOfficeToPdf({
+          documentId: document.id,
+          documentVersionId: document.versions[0].id,
+          teamId,
+        }).catch((error) => {
+          console.error("Error in Office to PDF conversion:", error);
+        });
       }
 
       if (type === "cad") {
-        await convertCadToPdfTask.trigger(
-          {
-            documentId: document.id,
-            documentVersionId: document.versions[0].id,
-            teamId,
-          },
-          {
-            idempotencyKey: `${teamId}-${document.versions[0].id}-cad`,
-            tags: [
-              `team_${teamId}`,
-              `document_${document.id}`,
-              `version:${document.versions[0].id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertCadToPdf({
+          documentId: document.id,
+          documentVersionId: document.versions[0].id,
+          teamId,
+        }).catch((error) => {
+          console.error("Error in CAD to PDF conversion:", error);
+        });
       }
 
       if (type === "video") {
-        await processVideo.trigger(
-          {
-            videoUrl: fileUrl,
-            teamId,
-            docId: fileUrl.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
-            documentVersionId: document.versions[0].id,
-            fileSize: fileSize || 0,
-          },
-          {
-            idempotencyKey: `${teamId}-${document.versions[0].id}`,
-            tags: [
-              `team_${teamId}`,
-              `document_${document.id}`,
-              `version:${document.versions[0].id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        optimizeVideo({
+          videoUrl: fileUrl,
+          teamId,
+          docId: fileUrl.split("/")[1], // Extract doc_xxxx from teamId/doc_xxxx/filename
+          documentVersionId: document.versions[0].id,
+          fileSize: fileSize || 0,
+        }).catch((error) => {
+          console.error("Error in video optimization:", error);
+        });
       }
 
       // skip triggering convert-pdf-to-image job for "notion" / "excel" documents
@@ -345,7 +315,7 @@ export default async function handle(
         message: `Failed to create document. \n\n*teamId*: _${teamId}_, \n\n*file*: ${fileUrl} \n\n ${error}`,
         type: "error",
       });
-      errorhandler(error, res);
+      errorHandler(error, res);
     }
   } else {
     // We only allow GET and POST requests

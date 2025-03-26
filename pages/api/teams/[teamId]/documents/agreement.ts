@@ -5,13 +5,12 @@ import { getServerSession } from "next-auth/next";
 
 import { errorhandler } from "@/lib/errorHandler";
 // Import our local implementation
+import { convertOfficeToPdf } from "@/lib/local-processing/convert-office-to-pdf";
 import { convertPdfToImage } from "@/lib/local-processing/pdf-to-image";
 import prisma from "@/lib/prisma";
 import { getTeamWithUsersAndDocument } from "@/lib/team/helper";
-import { convertFilesToPdfTask } from "@/lib/trigger/convert-files";
 import { CustomUser } from "@/lib/types";
 import { getExtension, log } from "@/lib/utils";
-import { conversionQueue } from "@/lib/utils/trigger-utils";
 
 import { authOptions } from "../../../auth/[...nextauth]";
 
@@ -117,23 +116,14 @@ export default async function handle(
       });
 
       if (type === "docs") {
-        await convertFilesToPdfTask.trigger(
-          {
-            documentId: document.id,
-            documentVersionId: document.versions[0].id,
-            teamId,
-          },
-          {
-            idempotencyKey: `${teamId}-${document.versions[0].id}-docs`,
-            tags: [
-              `team_${teamId}`,
-              `document_${document.id}`,
-              `version:${document.versions[0].id}`,
-            ],
-            queue: conversionQueue(team.plan),
-            concurrencyKey: teamId,
-          },
-        );
+        // Use our local implementation instead of Trigger.dev
+        convertOfficeToPdf({
+          documentId: document.id,
+          documentVersionId: document.versions[0].id,
+          teamId,
+        }).catch((error) => {
+          console.error("Error in Office to PDF conversion:", error);
+        });
       }
 
       // Convert PDF to images for viewing
