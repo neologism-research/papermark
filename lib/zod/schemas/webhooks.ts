@@ -99,12 +99,8 @@ export const webhookPayloadSchema = baseEventSchema.extend({
 
 export type WebhookPayload = z.infer<typeof webhookPayloadSchema>;
 
-// Schema of response sent to the webhook callback URL by QStash
-export const webhookCallbackSchema = z.object({
-  status: z.number(),
-  url: z.string(),
-  createdAt: z.number(),
-  sourceMessageId: z.string(),
-  body: z.string().optional().default(""), // Response from the original webhook URL
-  sourceBody: z.string(), // Original request payload from Papermark
-});
+// This schema is used to validate webhook URLs when creating or updating webhooks
+export const webhookURLSchema = z
+  .string()
+  .url()
+  .startsWith("http", { message: "The URL must start with http or https." });

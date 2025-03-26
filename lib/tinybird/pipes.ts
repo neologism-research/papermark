@@ -2,7 +2,6 @@ import { Tinybird } from "@chronark/zod-bird";
 import { z } from "zod";
 
 import { VIDEO_EVENT_TYPES } from "../constants";
-import { WEBHOOK_TRIGGERS } from "../webhook/constants";
 
 const tb = new Tinybird({ token: process.env.TINYBIRD_TOKEN! });
 
@@ -114,24 +113,6 @@ export const getDocumentDurationPerViewer = tb.buildPipe({
   }),
   data: z.object({
     sum_duration: z.number(),
-  }),
-});
-
-export const getWebhookEvents = tb.buildPipe({
-  pipe: "get_webhook_events__v1",
-  parameters: z.object({
-    webhookId: z.string(),
-  }),
-  data: z.object({
-    event_id: z.string(),
-    webhook_id: z.string(),
-    message_id: z.string(), // QStash message ID
-    event: z.enum(WEBHOOK_TRIGGERS),
-    url: z.string(),
-    http_status: z.number(),
-    request_body: z.string(),
-    response_body: z.string(),
-    timestamp: z.string(),
   }),
 });
 

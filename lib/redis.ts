@@ -1,30 +1,42 @@
-import { Ratelimit } from "@upstash/ratelimit";
-import { Redis } from "@upstash/redis";
+// Import express-rate-limit and Redis store
+import { rateLimit } from "express-rate-limit";
+import RedisStore from "rate-limit-redis";
+import { RedisClientType, createClient } from "redis";
 
-export const redis = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_URL as string,
-  token: process.env.UPSTASH_REDIS_REST_TOKEN as string,
+// Create Redis client with standard connection
+export const redis: RedisClientType = createClient({
+  url: `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ""}${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "6379"}`,
 });
 
-export const lockerRedisClient = new Redis({
-  url: process.env.UPSTASH_REDIS_REST_LOCKER_URL as string,
-  token: process.env.UPSTASH_REDIS_REST_LOCKER_TOKEN as string,
+// Connect to Redis (needs to be called once when the app starts)
+redis
+  .connect()
+  .catch((err: Error) => console.error("Redis connection error:", err));
+
+// Create a second Redis client for locking operations
+export const lockerRedisClient: RedisClientType = createClient({
+  url: `redis://${process.env.REDIS_PASSWORD ? `:${process.env.REDIS_PASSWORD}@` : ""}${process.env.REDIS_HOST || "localhost"}:${process.env.REDIS_PORT || "6379"}`,
+  database: 1, // Use a different DB for locking
 });
 
-// Create a new ratelimiter, that allows 10 requests per 10 seconds by default
+// Connect the locker client
+lockerRedisClient
+  .connect()
+  .catch((err: Error) => console.error("Redis locker connection error:", err));
+
+// Create a new ratelimiter function that returns a configured rate limiter
 export const ratelimit = (
   requests: number = 10,
-  seconds:
-    | `${number} ms`
-    | `${number} s`
-    | `${number} m`
-    | `${number} h`
-    | `${number} d` = "10 s",
+  duration: number = 10, // In seconds
 ) => {
-  return new Ratelimit({
-    redis: redis,
-    limiter: Ratelimit.slidingWindow(requests, seconds),
-    analytics: true,
-    prefix: "papermark",
+  return rateLimit({
+    windowMs: duration * 1000,
+    max: requests,
+    standardHeaders: true,
+    store: new RedisStore({
+      // @ts-ignore - Type issue with sendCommand in the rate-limit-redis types
+      sendCommand: (...args: string[]) => redis.sendCommand(args),
+      prefix: "papermark:rl:",
+    }),
   });
 };

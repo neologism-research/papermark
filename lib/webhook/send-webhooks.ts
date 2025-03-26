@@ -1,7 +1,8 @@
 import { Webhook } from "@prisma/client";
+import fetch from "node-fetch";
 import { z } from "zod";
 
-import { qstash } from "@/lib/cron";
+import { limiter } from "@/lib/cron";
 import { webhookPayloadSchema } from "@/lib/zod/schemas/webhooks";
 
 import { createWebhookSignature } from "./signature";
@@ -25,37 +26,44 @@ export const sendWebhooks = async ({
   const payload = prepareWebhookPayload(trigger, data);
 
   return await Promise.all(
-    webhooks.map((webhook) =>
-      publishWebhookEventToQStash({ webhook, payload }),
-    ),
+    webhooks.map((webhook) => sendWebhookDirectly({ webhook, payload })),
   );
 };
 
-// Publish webhook event to QStash
-const publishWebhookEventToQStash = async ({
+// Send webhook event directly using fetch
+const sendWebhookDirectly = async ({
   webhook,
   payload,
 }: {
   webhook: Pick<Webhook, "pId" | "url" | "secret">;
   payload: z.infer<typeof webhookPayloadSchema>;
 }) => {
-  const callbackUrl = `${process.env.NEXT_PUBLIC_BASE_URL}/api/webhooks/callback?webhookId=${webhook.pId}`;
   const signature = await createWebhookSignature(webhook.secret, payload);
 
-  const response = await qstash.publishJSON({
-    url: webhook.url,
-    body: payload,
-    headers: {
-      "X-Papermark-Signature": signature,
-      "Upstash-Hide-Headers": "true",
-    },
-    callback: callbackUrl,
-    failureCallback: callbackUrl,
-  });
+  try {
+    // Use the bottleneck limiter to avoid rate limiting
+    const response = await limiter.schedule(() =>
+      fetch(webhook.url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Papermark-Signature": signature,
+        },
+        body: JSON.stringify(payload),
+      }),
+    );
 
-  if (!response.messageId) {
-    console.error("Failed to publish webhook event to QStash", response);
+    return {
+      success: response.ok,
+      status: response.status,
+      url: webhook.url,
+    };
+  } catch (error) {
+    console.error(`Failed to send webhook to ${webhook.url}:`, error);
+    return {
+      success: false,
+      error: (error as Error).message,
+      url: webhook.url,
+    };
   }
-
-  return response;
 };

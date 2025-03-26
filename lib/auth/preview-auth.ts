@@ -33,8 +33,12 @@ async function createPreviewSession(
   await redis.set(
     `preview_session:${sessionToken}`,
     JSON.stringify(sessionData),
-    { pxat: expiresAt },
+    {
+      EX: PREVIEW_EXPIRATION_TIME,
+    },
   );
+
+  console.log("Preview session created:", sessionToken);
 
   return {
     token: sessionToken,
@@ -54,9 +58,11 @@ async function verifyPreviewSession(
   if (!session) return null;
 
   try {
-    const sessionData = ZPreviewSessionSchema.parse(session);
+    const sessionData = ZPreviewSessionSchema.parse(JSON.parse(session));
 
     // Check if the session is for the correct user
+    console.log("Session data:", sessionData);
+    console.log("User ID:", userId);
     if (sessionData.userId !== userId) {
       await redis.del(`preview_session:${sessionToken}`);
       return null;
